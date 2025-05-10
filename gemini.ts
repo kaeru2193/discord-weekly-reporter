@@ -4,8 +4,10 @@ import fs from "fs"
 
 const APIKEY = process.env.API_KEY
 const PROMPT = process.env.PROMPT
+const MODEL = process.env.MODEL
 if (!APIKEY) { throw Error("API KEY is not defined.") }
 if (!PROMPT) { throw Error("PROMPT is not defined.") }
+if (!MODEL) { throw Error("MODEL is not defined.") }
 
 const genAI = new GoogleGenAI({ apiKey: APIKEY })
 
@@ -16,7 +18,7 @@ export const GenResponse = async () => {
     if (!logFile.uri || !logFile.mimeType) { throw Error("this file has not been uploaded.") }
 
     const res = await genAI.models.generateContent({
-        model: "gemini-2.5-flash-preview-04-17",
+        model: MODEL,
         contents: createUserContent([
             createPartFromUri(logFile.uri, logFile.mimeType),
             "\n\n",

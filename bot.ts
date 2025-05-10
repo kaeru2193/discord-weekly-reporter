@@ -9,10 +9,11 @@ dotenv.config()
 
 const TOKEN = process.env.BOT_TOKEN
 const TITLE = process.env.TITLE
+const GUILD = process.env.GUILD
 const CHANNEL = process.env.CHANNEL
 
 if (!TITLE) { throw Error("title is not defined.")}
-if (!CHANNEL) { throw Error("channel is not defined.")}
+if (!GUILD || !CHANNEL) { throw Error("guild or channel is not defined.")}
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates] });
 
@@ -23,6 +24,7 @@ client.once(Events.ClientReady, c => {
 client.login(TOKEN);
 
 client.on(Events.MessageCreate, async (message: Message) => {
+    if (message.guild?.id != GUILD) { return } //対象のサーバー以外を無視
     if (message.author.bot) return //bot自身の発言を無視
 	if (message.system) return //システムメッセージを無視
 
