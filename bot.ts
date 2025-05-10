@@ -29,7 +29,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
     recordMessage(message)
 })
 
-cron.schedule("0 20 * * 0", async () => { //毎週日曜20:00
+cron.schedule("0 20 * * 5", async () => { //毎週金曜20:00
     await writeReport()
 })
 
@@ -73,7 +73,7 @@ const formatLog = (start: Date) => {
     const channels = filtered.map(c =>
         `## 「${c.name}」チャンネルのログ\n` +
         c.messages.map(m =>
-            `${m.content} (@${m.user}, ${m.date})`
+            `@${m.user}:${m.content} (${new Date(m.date).toLocaleString()})`
         ).join("\n")
     )
 
@@ -96,4 +96,5 @@ const writeReport = async () => {
     if (!channel.isSendable()) { return }
 
     channel.send(title + `\n\n` + report)
+    fs.writeFileSync("./output.txt", report)
 }

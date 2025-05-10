@@ -16,7 +16,7 @@ export const GenResponse = async () => {
     if (!logFile.uri || !logFile.mimeType) { throw Error("this file has not been uploaded.") }
 
     const res = await genAI.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash-preview-04-17",
         contents: createUserContent([
             createPartFromUri(logFile.uri, logFile.mimeType),
             "\n\n",

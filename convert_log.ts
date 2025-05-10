@@ -12,8 +12,8 @@ const processed = arr.map(m => {
         Message: m.Content.replace(/\n/g, " "),
         Date: new Date(m.Date).toLocaleString()
     }
-    return `${message.Message} (@${message.User} ${message.Date})`
+    return `${message.Message} (${message.Date} @${message.User})`
 })
 
 //const output = stringify(processed, { header: true })
-fs.writeFileSync("./formatted_log.txt", processed.join("\n"))
+fs.writeFileSync("./formatLog.txt", processed.join("\n"))
