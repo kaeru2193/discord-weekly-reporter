@@ -31,7 +31,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
     recordMessage(message)
 })
 
-cron.schedule("0 20 * * 5", async () => { //毎週金曜20:00
+cron.schedule("0 20 * * 0", async () => { //毎週金曜20:00
     await writeReport()
 })
 
@@ -66,17 +66,19 @@ const recordMessage = (message: Message) => {
 const formatLog = (start: Date) => {
     const data = fs.readFileSync("./log.json", "utf-8")
     const json: Log = JSON.parse(data)
+    const days = ["日", "月", "火", "水", "木", "金", "土"]
 
     const filtered = json.map(c => {
         c.messages = c.messages.filter(m => new Date(m.date).getTime() >= start.getTime())
         return c
     }).filter(c => c.messages.length > 0) //新規メッセージがあったものだけ抽出
 
-    const channels = filtered.map(c =>
-        `## 「${c.name}」チャンネルのログ\n` +
-        c.messages.map(m =>
-            `@${m.user}:${m.content} (${new Date(m.date).toLocaleString()})`
-        ).join("\n")
+    const channels = filtered.map(c => 
+        `「${c.name}」チャンネル\n` +
+        c.messages.map(m => {
+            const date = new Date(m.date)
+            return `${m.content} --${date.toLocaleDateString()} (${days[date.getDay()]}) ${date.toLocaleTimeString()}`
+        }).join("\n")
     )
 
     return channels.join("\n\n")
@@ -97,6 +99,11 @@ const writeReport = async () => {
     if (!channel) { return } //存在しなければ終了
     if (!channel.isSendable()) { return }
 
-    channel.send(title + `\n\n` + report)
+    const content = title + `\n\n` + report
+    const chunkSize = 1900
+    for (let pos = 0; pos < content.length; pos += chunkSize) {
+        await channel.send(content.slice(pos, pos + chunkSize))
+    }
+
     fs.writeFileSync("./output.txt", report)
 }
