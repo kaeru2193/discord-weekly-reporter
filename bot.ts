@@ -1,4 +1,4 @@
-import { GatewayIntentBits, Client, Events, Message, SendableChannels } from 'discord.js'
+import { GatewayIntentBits, Client, Events, Message, SendableChannels, ChannelType, TextChannel } from 'discord.js'
 import dotenv from 'dotenv'
 import fs from "fs"
 import cron from "node-cron"
@@ -10,11 +10,13 @@ dotenv.config()
 const TOKEN = process.env.BOT_TOKEN
 const TITLE = process.env.TITLE
 const TITLE_ENGLISH = process.env.TITLE_ENGLISH
+const TITLE_CHINESE = process.env.TITLE_CHINESE
 const GUILD = process.env.GUILD
 const CHANNEL = process.env.CHANNEL
 
 const PROMPT = fs.readFileSync("./prompt.txt", "utf8")
 const PROMPT_ENGLISH = fs.readFileSync("./prompt_english.txt", "utf8")
+const PROMPT_CHINESE = fs.readFileSync("./prompt_chinese.txt", "utf8")
 
 if (!TITLE) { throw Error("title is not defined.")}
 if (!GUILD || !CHANNEL) { throw Error("guild or channel is not defined.")}
@@ -36,7 +38,13 @@ client.on(Events.MessageCreate, async (message: Message) => {
 })
 
 cron.schedule("0 20 * * 0", async () => { //毎週日曜20:00
+    await prepareWriting()
     await writeReport()
+    await writeEnglishReport()
+})
+
+cron.schedule("5 20 * * 0", async () => { //毎週日曜20:05
+    await writeChineseReport()
 })
 
 const recordMessage = (message: Message) => {
@@ -80,7 +88,7 @@ const formatLog = (json: Log, start: Date) => {
         c.messages.map(m => {
             const date = new Date(m.date)
             return `${m.content} --${date.toLocaleDateString()} (${days[date.getDay()]}) ${date.toLocaleTimeString()}`
-        }).join("\n")
+        }).filter(m => Math.random() > 0).join("\n")
     )
 
     return channels.join("\n\n")
@@ -107,7 +115,7 @@ const nameUpdate = async (log: Log) => {
     }))
 }
 
-const writeReport = async () => {
+const prepareWriting = async () => {
     const data = fs.readFileSync("./log.json", "utf-8")
     const json: Log = JSON.parse(data)
 
@@ -119,33 +127,62 @@ const writeReport = async () => {
     startDate.setDate(startDate.getDate() - 7) //7日戻す
 
     fs.writeFileSync("./formatLog.txt", formatLog(updated, startDate))
-    
-    console.log("執筆中…")
+    fs.writeFileSync("./date.txt", `${startDate.toLocaleDateString()}～${nowDate.toLocaleDateString()}`)
+}
 
+const getChannel = () => {
     const channel = client.channels.cache.get(CHANNEL) //送信するチャンネル
-    if (!channel) { return } //存在しなければ終了
-    if (!channel.isSendable()) { return }
+    if (!channel) { throw Error("the channel doesn't exist.") } //存在しなければ終了
+    if (channel.type != ChannelType.GuildText) { throw Error("the channel isn't sendable.") }
+
+    return channel
+}
+
+const writeReport = async () => {
+    console.log("執筆中…")
+    const date = fs.readFileSync("./date.txt", "utf-8")
+    const channel = getChannel()
 
     const report = await GenResponse(PROMPT)
     fs.writeFileSync("./output.txt", report)
 
-    const title = `## ${TITLE} ${startDate.toLocaleDateString()}～${nowDate.toLocaleDateString()}`
+    const title = `## ${TITLE} ${date}`
     const content = title + `\n\n` + report
     await sendReport(content, channel)
+}
+
+const writeEnglishReport = async () => {
+    console.log("英語版を執筆中…")
+    const date = fs.readFileSync("./date.txt", "utf-8")
+    const channel = getChannel()
 
     const reportEnglish = await GenResponse(PROMPT_ENGLISH, "./output.txt") //英語版を執筆
     fs.writeFileSync("./output_english.txt", reportEnglish)
 
-    const messageFetch = (await channel.messages.fetch({limit: 1})) //最後のメッセージ（botの日本語版レポートを取得）
-    const latestMessage = Array.from(messageFetch)[0][1] //最後のメッセージ本体
-    const englishThread = await latestMessage.startThread({ //そこにスレッドを作成
+    const englishThread = await channel.threads.create({
         name: `${TITLE_ENGLISH} (English Version)`,
         autoArchiveDuration: 60
     })
-    
-    const titleEnglish = `## ${TITLE_ENGLISH} ${startDate.toLocaleDateString()}～${nowDate.toLocaleDateString()}`
+    const titleEnglish = `## ${TITLE_ENGLISH} ${date}`
     const contentEnglish = titleEnglish + `\n\n` + reportEnglish
-    await sendReport(contentEnglish, englishThread)
+    await sendReport(contentEnglish, englishThread) //英語版を投稿
+}
+
+const writeChineseReport = async () => {
+    console.log("中文版を執筆中…")
+    const date = fs.readFileSync("./date.txt", "utf-8")
+    const channel = getChannel()
+
+    const reportChinese = await GenResponse(PROMPT_CHINESE, "./output.txt") //中文版を執筆
+    fs.writeFileSync("./output_chinese.txt", reportChinese)
+
+    const chineseThread = await channel.threads.create({
+        name: `${TITLE_CHINESE} (中文版)`,
+        autoArchiveDuration: 60
+    })
+    const titleChinese = `## ${TITLE_CHINESE} ${date}`
+    const contentChinese = titleChinese + `\n\n` + reportChinese
+    await sendReport(contentChinese, chineseThread) //中文版を投稿
 }
 
 const sendReport = async (content: string, channel: SendableChannels) => {

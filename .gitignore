@@ -1,8 +1,11 @@
 /node_modules
 .env
 formatLog.txt
+date.txt
 output.txt
 output_english.txt
+output_chinese.txt
 prompt.txt
 prompt_english.txt
+prompt_chinese.txt
 *.js
