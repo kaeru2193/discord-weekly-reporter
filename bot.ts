@@ -15,6 +15,7 @@ const GUILD = process.env.GUILD
 const CHANNEL = process.env.CHANNEL
 
 const PROMPT = fs.readFileSync("./prompt.txt", "utf8")
+const PROMPT_ANNUAL = fs.readFileSync("./prompt_annual.txt", "utf8")
 const PROMPT_ENGLISH = fs.readFileSync("./prompt_english.txt", "utf8")
 const PROMPT_CHINESE = fs.readFileSync("./prompt_chinese.txt", "utf8")
 
@@ -23,7 +24,7 @@ if (!GUILD || !CHANNEL) { throw Error("guild or channel is not defined.")}
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates] });
 
-client.once(Events.ClientReady, c => {
+client.once(Events.ClientReady, async (c) => {
 	console.log(`${c.user.tag}でログインしました。`);
 });
 
@@ -47,6 +48,11 @@ cron.schedule("5 20 * * 0", async () => { //毎週日曜20:05
     await writeChineseReport()
 })
 
+cron.schedule("0 22 31 12 *", async () => { //毎年大晦日の22時
+    await prepareAnnualWriting()
+    await writeAnnualReport()
+})
+
 const recordMessage = (message: Message) => {
     if (message.channel.isDMBased()) { return }
 
@@ -68,6 +74,7 @@ const recordMessage = (message: Message) => {
         json.push({
             id: channelID,
             name: message.channel.name,
+            isThread: message.channel.isThread(),
             messages: [messageData]
         })
     }
@@ -84,7 +91,9 @@ const formatLog = (json: Log, start: Date) => {
     }).filter(c => c.messages.length > 0) //新規メッセージがあったものだけ抽出
 
     const channels = filtered.map(c => 
-        `「${c.name}」チャンネル\n` +
+        (c.isThread
+            ? `「${c.name}」スレッド\n`
+            : `「${c.name}」チャンネル\n`) +
         c.messages.map(m => {
             const date = new Date(m.date)
             return `${m.content} --${date.toLocaleDateString()} (${days[date.getDay()]}) ${date.toLocaleTimeString()}`
@@ -130,6 +139,28 @@ const prepareWriting = async () => {
     fs.writeFileSync("./date.txt", `${startDate.toLocaleDateString()}～${nowDate.toLocaleDateString()}`)
 }
 
+const prepareAnnualWriting = async () => {
+    const data = fs.readFileSync("./log.json", "utf-8")
+    const json: Log = JSON.parse(data)
+
+    const updated: Log = await nameUpdate(json) //チャンネル名の更新処理
+    fs.writeFileSync("./log.json", JSON.stringify(updated))
+
+    const nowDate = new Date()
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - startDate.getDay()) //直近の日曜日に戻す
+
+    fs.writeFileSync("./formatLog.txt", formatLog(updated, startDate))
+    
+    const articles = fs.readdirSync("./archives") //今年の記事を抜粋
+        .filter(a => a.startsWith(
+            String(nowDate.getFullYear()
+        )))
+    const combined = articles.map(a => fs.readFileSync(`./archives/${a}`, "utf-8")).join("\n\n\n")
+
+    fs.writeFileSync("./annualArticles.txt", combined)
+}
+
 const getChannel = () => {
     const channel = client.channels.cache.get(CHANNEL) //送信するチャンネル
     if (!channel) { throw Error("the channel doesn't exist.") } //存在しなければ終了
@@ -146,7 +177,25 @@ const writeReport = async () => {
     const report = await GenResponse(PROMPT)
     fs.writeFileSync("./output.txt", report)
 
+    const articlePath = new Date().toLocaleDateString("ja-JP", {year: "numeric", month: "2-digit", day: "2-digit"}).replace("/", "")
+    fs.writeFileSync(`./archives/${articlePath}.txt`, report) //アーカイブとして保存
+
     const title = `## ${TITLE} ${date}`
+    const content = title + `\n\n` + report
+    await sendReport(content, channel)
+}
+
+const writeAnnualReport = async () => {
+    console.log("特別号を執筆中…")
+    const year = new Date().getFullYear()
+    const channel = getChannel()
+
+    const report = await GenResponse(PROMPT_ANNUAL, "./annualArticles.txt")
+    fs.writeFileSync("./output_annual.txt", report)
+
+    fs.writeFileSync(`./archives/${year}SP.txt`, report) //アーカイブとして保存
+
+    const title = `## ${TITLE} ${year}年特別号`
     const content = title + `\n\n` + report
     await sendReport(content, channel)
 }
